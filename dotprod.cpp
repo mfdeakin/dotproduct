@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <time.h>
 #include <gtest/gtest.h>
+#include <unistd.h>
+#include <getopt.h>
 
 #include <random>
 
@@ -83,9 +85,32 @@ testResult<retType> testFunction(fptype *vec1, fptype *vec2,
   return ret;
 }
 
+void parseOptions(int argc, char **argv,
+                  int &testSize, int &numTests) {
+  struct option opts[] = {
+    {"dimension", required_argument, NULL, testSize},
+    {"tests", required_argument, NULL, numTests},
+    {NULL, no_argument, 0, 0}
+  };
+  int ret = 0;
+  do {
+    ret = getopt(argc, argv, "d:t:");
+    switch(ret) {
+    case 'd':
+      testSize = atoi(optarg);
+      break;
+    case 't':
+      numTests = atoi(optarg);
+      break;
+    }
+  } while(ret != -1);
+}
+
 int main(int argc, char **argv) {
   int testSize = 1024;
   int numTests = 65536;
+  parseOptions(argc, argv, testSize, numTests);
+  
   float *vec1, *vec2;
   vec1 = (float *)malloc(sizeof(float[testSize]));
   vec2 = (float *)malloc(sizeof(float[testSize]));
