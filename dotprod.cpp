@@ -61,6 +61,28 @@ struct timespec addTimes(struct timespec t1,
   return sum;
 }
 
+template <typename fptype>
+struct testResult {
+  struct timespec elapsedTime;
+  fptype result;
+};
+
+template <typename fptype, typename retType,
+          retType (*dp)(const fptype *, const fptype *, unsigned len)>
+testResult<retType> testFunction(fptype *vec1, fptype *vec2,
+                                 unsigned len) {
+  struct timespec start;
+  int error = clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start);
+  assert(!error);
+  retType result = dp(vec1, vec2, len);
+  struct timespec end;
+  error = clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &end);
+  assert(!error);
+  struct timespec delta = subtractTimes(start, end);
+  struct testResult<retType> ret = {delta, result};
+  return ret;
+}
+
 int main(int argc, char **argv) {
   int testSize = 1024;
   int numTests = 65536;
@@ -77,34 +99,32 @@ int main(int argc, char **argv) {
   double totalErr[2] = {0.0, 0.0};
   for(int i = 0; i < numTests; i++) {
     genVector(vec1, testSize, engine, rgenf);
-
-    struct timespec start;
-    int error = clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start);
-    assert(!error);
-    double correct = correctDotProd(vec1, vec2, testSize);
-    struct timespec end;
-    error = clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &end);
-    assert(!error);
-    struct timespec delta = subtractTimes(start, end);
-    runningTimes[0] = addTimes(runningTimes[0], delta);
+    genVector(vec2, testSize, engine, rgenf);
+    struct testResult<double> correctResult =
+      testFunction<float, double,
+                   correctDotProd<float> >(vec1, vec2,
+                                           testSize);
+    runningTimes[0] = addTimes(correctResult.elapsedTime,
+                               runningTimes[0]);
     
-    error = clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start);
-    assert(!error);
-    double bad1 = dotProd(vec1, vec2, testSize);
-    error = clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &end);
-    assert(!error);
-    delta = subtractTimes(start, end);
-    runningTimes[1] = addTimes(runningTimes[1], delta);
-    totalErr[0] += fabs(correct - bad1);
-
-    error = clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start);
-    assert(!error);
-    double bad2 = compensatedDotProd(vec1, vec2, testSize);
-    error = clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &end);
-    assert(!error);
-    delta = subtractTimes(start, end);
-    runningTimes[2] = addTimes(runningTimes[2], delta);
-    totalErr[1] += fabs(correct - bad2);
+    struct testResult<float> spResult =
+      testFunction<float, float,
+                   dotProd<float> >(vec1, vec2,
+                                    testSize);
+    runningTimes[1] = addTimes(spResult.elapsedTime,
+                               runningTimes[1]);
+    double err1 = std::fabs(spResult.result - correctResult.result);
+    totalErr[0] += err1;
+    
+    struct testResult<float> compensatedResult =
+      testFunction<float, float,
+                   compensatedDotProd<float> >(vec1, vec2,
+                                               testSize);
+    runningTimes[2] = addTimes(compensatedResult.elapsedTime,
+                               runningTimes[2]);
+    double err2 = std::fabs(compensatedResult.result -
+                            correctResult.result);
+    totalErr[1] += err2;
   }
   printf("Ran %d tests of size %d\n"
          "Correct Running Time: %ld.%09ld s\n"
