@@ -30,11 +30,25 @@ fptype dotProd(const fptype *v1, const fptype *v2,
 }
 
 template <typename fptype>
-double correctDotProd(const fptype *v1, const fptype *v2,
-                      unsigned len) {
-  double total = 0.0;
+fptype kahanDotProd(const fptype *v1, const fptype *v2,
+                    unsigned len) {
+  fptype total = 0.0;
+  fptype c = 0.0;
+  for(unsigned i = 0; i < len; i++) {
+    fptype mod = fma(v1[i], v2[i], -c);
+    fptype tmp = total + mod;
+    c = (tmp - total) - mod;
+    total = tmp;
+  }
+  return total;
+}
+
+template <typename fptype>
+long double correctDotProd(const fptype *v1, const fptype *v2,
+                           unsigned len) {
+  long double total = 0.0;
   for (unsigned i = 0; i < len; i++) {
-    total += v1[i] * v2[i];
+    total = fmal(v1[i], v2[i], total);
   }
   return total;
 }
@@ -121,15 +135,16 @@ int main(int argc, char **argv) {
   std::mt19937_64 engine(rd());
   std::uniform_real_distribution<float> rgenf(-maxMag,
                                               maxMag);
-  struct timespec runningTimes[3] = {
-      {0, 0}, {0, 0}, {0, 0}};
-  double totalErr[2] = {0.0, 0.0};
+  struct timespec runningTimes[] = {
+      {0, 0}, {0, 0}, {0, 0}, {0, 0}};
+  long double totalErr[] = {0.0, 0.0, 0.0};
   for (int i = 0; i < numTests; i++) {
     genVector(vec1, testSize, engine, rgenf);
     genVector(vec2, testSize, engine, rgenf);
-    struct testResult<double> correctResult =
-        testFunction<float, double, correctDotProd<float> >(
-            vec1, vec2, testSize);
+    struct testResult<long double> correctResult =
+        testFunction<float, long double,
+                     correctDotProd<float> >(vec1, vec2,
+                                             testSize);
     runningTimes[0] = addTimes(correctResult.elapsedTime,
                                runningTimes[0]);
 
@@ -139,8 +154,9 @@ int main(int argc, char **argv) {
     runningTimes[1] =
         addTimes(spResult.elapsedTime, runningTimes[1]);
     double err1 =
-        std::fabs(spResult.result - correctResult.result);
-    totalErr[0] += err1;
+        std::fabs(spResult.result - correctResult.result) /
+        correctResult.result;
+    totalErr[0] += logl(err1) / logl(10.0);
 
     struct testResult<float> compensatedResult =
         testFunction<float, float,
@@ -149,19 +165,38 @@ int main(int argc, char **argv) {
     runningTimes[2] = addTimes(
         compensatedResult.elapsedTime, runningTimes[2]);
     double err2 = std::fabs(compensatedResult.result -
-                            correctResult.result);
-    totalErr[1] += err2;
+                            correctResult.result) /
+                  correctResult.result;
+    totalErr[1] += logl(err2) / logl(10.0);
+
+    struct testResult<float> kahanResult =
+      testFunction<float, float,
+                   kahanDotProd<float> >(vec1, vec2,
+                                         testSize);
+    runningTimes[3] = addTimes(
+        kahanResult.elapsedTime, runningTimes[3]);
+    double err3 = std::fabs(kahanResult.result -
+                            correctResult.result) /
+                  correctResult.result;
+    totalErr[2] += logl(err3) / logl(10.0);
   }
   printf(
       "Ran %d tests of size %d\n"
       "Correct Running Time: %ld.%09ld s\n"
-      "Naive Time: %ld.%09ld s; Error %e\n"
-      "Compensated Time: %ld.%09ld s; Error %e\n",
+      "Naive Time: %ld.%09ld s; Error %Le\n"
+      "Compensated Time: %ld.%09ld s; Error %Le, "
+      "Error-Naive: %Le\n"
+      "Kahan Time: %ld.%09ld s; Error %Le, Error-Naive: "
+      "%Le\n",
       numTests, testSize, runningTimes[0].tv_sec,
       runningTimes[0].tv_nsec, runningTimes[1].tv_sec,
-      runningTimes[1].tv_nsec, totalErr[0],
+      runningTimes[1].tv_nsec, totalErr[0] / numTests,
       runningTimes[2].tv_sec, runningTimes[2].tv_nsec,
-      totalErr[1]);
+      totalErr[1] / numTests,
+      (totalErr[1] - totalErr[0]) / numTests,
+      runningTimes[3].tv_sec, runningTimes[3].tv_nsec,
+      totalErr[2] / numTests,
+      (totalErr[2] - totalErr[0]) / numTests);
   free(vec2);
   free(vec1);
   return 0;
