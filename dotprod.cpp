@@ -9,12 +9,13 @@
 #include <random>
 
 #include "accurate_math.hpp"
+#include "kobbelt.hpp"
 
 template <typename fptype>
 void genVector(
     fptype *vec, unsigned vecSize, std::mt19937_64 rgen,
     std::uniform_real_distribution<fptype> dist) {
-  for (unsigned i = 0; i < vecSize; i++) {
+  for(unsigned i = 0; i < vecSize; i++) {
     vec[i] = dist(rgen);
   }
 }
@@ -23,7 +24,7 @@ template <typename fptype>
 fptype dotProd(const fptype *v1, const fptype *v2,
                unsigned len) {
   fptype total = 0.0;
-  for (unsigned i = 0; i < len; i++) {
+  for(unsigned i = 0; i < len; i++) {
     total += v1[i] * v2[i];
   }
   return total;
@@ -44,10 +45,10 @@ fptype kahanDotProd(const fptype *v1, const fptype *v2,
 }
 
 template <typename fptype>
-long double correctDotProd(const fptype *v1, const fptype *v2,
-                           unsigned len) {
+long double correctDotProd(const fptype *v1,
+                           const fptype *v2, unsigned len) {
   long double total = 0.0;
-  for (unsigned i = 0; i < len; i++) {
+  for(unsigned i = 0; i < len; i++) {
     total = fmal(v1[i], v2[i], total);
   }
   return total;
@@ -58,7 +59,7 @@ struct timespec subtractTimes(struct timespec start,
   struct timespec delta;
   delta.tv_sec = end.tv_sec - start.tv_sec;
   delta.tv_nsec = end.tv_nsec - start.tv_nsec;
-  if (delta.tv_nsec < 0) {
+  if(delta.tv_nsec < 0) {
     delta.tv_sec--;
     delta.tv_nsec += 1e9;
   }
@@ -71,7 +72,7 @@ struct timespec addTimes(struct timespec t1,
   sum.tv_nsec = t1.tv_nsec + t2.tv_nsec;
   sum.tv_sec = t1.tv_sec + t2.tv_sec;
   const int maxNSec = 1000000000;
-  if (sum.tv_nsec > maxNSec) {
+  if(sum.tv_nsec > maxNSec) {
     sum.tv_nsec -= maxNSec;
     sum.tv_sec++;
   }
@@ -109,7 +110,7 @@ void parseOptions(int argc, char **argv, int &testSize,
   int ret = 0;
   do {
     ret = getopt(argc, argv, "d:t:");
-    switch (ret) {
+    switch(ret) {
       case 'd':
         testSize = atoi(optarg);
         break;
@@ -117,7 +118,7 @@ void parseOptions(int argc, char **argv, int &testSize,
         numTests = atoi(optarg);
         break;
     }
-  } while (ret != -1);
+  } while(ret != -1);
 }
 
 int main(int argc, char **argv) {
@@ -136,9 +137,10 @@ int main(int argc, char **argv) {
   std::uniform_real_distribution<float> rgenf(-maxMag,
                                               maxMag);
   struct timespec runningTimes[] = {
-      {0, 0}, {0, 0}, {0, 0}, {0, 0}};
-  long double totalErr[] = {0.0, 0.0, 0.0};
-  for (int i = 0; i < numTests; i++) {
+      {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}};
+  long double totalErr[] = {0.0, 0.0, 0.0, 0.0};
+  unsigned numDiffs[] = {0, 0, 0};
+  for(int i = 0; i < numTests; i++) {
     genVector(vec1, testSize, engine, rgenf);
     genVector(vec2, testSize, engine, rgenf);
     struct testResult<long double> correctResult =
@@ -167,36 +169,50 @@ int main(int argc, char **argv) {
     double err2 = std::fabs(compensatedResult.result -
                             correctResult.result) /
                   correctResult.result;
+    if(compensatedResult.result != spResult.result)
+      numDiffs[0]++;
     totalErr[1] += logl(err2) / logl(10.0);
 
     struct testResult<float> kahanResult =
-      testFunction<float, float,
-                   kahanDotProd<float> >(vec1, vec2,
-                                         testSize);
-    runningTimes[3] = addTimes(
-        kahanResult.elapsedTime, runningTimes[3]);
+        testFunction<float, float, kahanDotProd<float> >(
+            vec1, vec2, testSize);
+    runningTimes[3] =
+        addTimes(kahanResult.elapsedTime, runningTimes[3]);
     double err3 = std::fabs(kahanResult.result -
                             correctResult.result) /
                   correctResult.result;
+    if(kahanResult.result != spResult.result) numDiffs[1]++;
     totalErr[2] += logl(err3) / logl(10.0);
+
+    struct testResult<float> kobbeltResult =
+        testFunction<float, float, kobbeltDotProd<float> >(
+            vec1, vec2, testSize);
+    runningTimes[4] = addTimes(kobbeltResult.elapsedTime,
+                               runningTimes[4]);
+    double err4 = std::fabs(kobbeltResult.result -
+                            correctResult.result) /
+                  correctResult.result;
+    if(kobbeltResult.result != spResult.result)
+      numDiffs[2]++;
+    totalErr[3] += logl(err4) / logl(10.0);
   }
   printf(
       "Ran %d tests of size %d\n"
       "Correct Running Time: %ld.%09ld s\n"
       "Naive Time: %ld.%09ld s; Error %Le\n"
       "Compensated Time: %ld.%09ld s; Error %Le, "
-      "Error-Naive: %Le\n"
+      "Error-Naive: %Le, Number of times different: %u\n"
       "Kahan Time: %ld.%09ld s; Error %Le, Error-Naive: "
-      "%Le\n",
+      "%Le, Number of times different: %u\n",
       numTests, testSize, runningTimes[0].tv_sec,
       runningTimes[0].tv_nsec, runningTimes[1].tv_sec,
       runningTimes[1].tv_nsec, totalErr[0] / numTests,
       runningTimes[2].tv_sec, runningTimes[2].tv_nsec,
       totalErr[1] / numTests,
-      (totalErr[1] - totalErr[0]) / numTests,
+      (totalErr[1] - totalErr[0]) / numTests, numDiffs[0],
       runningTimes[3].tv_sec, runningTimes[3].tv_nsec,
       totalErr[2] / numTests,
-      (totalErr[2] - totalErr[0]) / numTests);
+      (totalErr[2] - totalErr[0]) / numTests, numDiffs[1]);
   free(vec2);
   free(vec1);
   return 0;

@@ -9,7 +9,7 @@
 #include "genericfp.hpp"
 
 template <unsigned size, typename fptype>
-fptype kahanSum(const fptype (&summands)[size]) {
+fptype kahanSum(const fptype(&summands)[size]) {
   fptype ret = 0.0;
   fptype c = 0.0;
   for(unsigned i = 0; i < size; i++) {
@@ -57,7 +57,8 @@ std::array<fptype, 2> twoProd(fptype lhs, fptype rhs) {
 }
 
 template <typename fptype>
-std::array<fptype, 3> threeFMA(fptype a, fptype b, fptype c) {
+std::array<fptype, 3> threeFMA(fptype a, fptype b,
+                               fptype c) {
   fptype r1 = std::fma(a, b, c);
   std::array<fptype, 2> mult = twoProd(a, b);
   std::array<fptype, 2> sum1 = twoSum(c, mult[1]);
@@ -76,7 +77,8 @@ fptype compensatedDotProd(const fptype *vec1,
   fptype s = prod[0];
   fptype c = prod[1];
   for(unsigned i = 1; i < dim; i++) {
-    std::array<fptype, 3> temp = threeFMA(vec1[i], vec2[i], s);
+    std::array<fptype, 3> temp =
+        threeFMA(vec1[i], vec2[i], s);
     s = temp[0];
     c = c + (temp[1] + temp[2]);
   }

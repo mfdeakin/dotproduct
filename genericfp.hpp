@@ -5,7 +5,8 @@
 #include <assert.h>
 
 /* The strucure for little endian architectures */
-template<unsigned e, unsigned p> struct fp {
+template <unsigned e, unsigned p>
+struct fp {
   unsigned long mantissa : p;
   unsigned long exponent : e;
   unsigned sign : 1;
@@ -65,13 +66,15 @@ float gfFloat(T orig);
 template <typename T>
 double gfDouble(T orig);
 
-template<unsigned pBits, unsigned eBits>
-void gfFPToBinString(fp<pBits, eBits> in,
-                     char (&out)[(pBits + eBits) / 4 + 1 + 6]);
+template <unsigned pBits, unsigned eBits>
+void gfFPToBinString(
+    fp<pBits, eBits> in,
+    char(&out)[(pBits + eBits) / 4 + 1 + 6]);
 
-template<unsigned pBits, unsigned eBits>
-void gfFPToBinString(fp<pBits, eBits> in,
-                     char (&out)[(pBits + eBits) / 4 + 1 + 6]) {
+template <unsigned pBits, unsigned eBits>
+void gfFPToBinString(
+    fp<pBits, eBits> in,
+    char(&out)[(pBits + eBits) / 4 + 1 + 6]) {
   snprintf(out, pBits + eBits + 5, "2^%x * 1.%x");
 }
 
@@ -95,38 +98,30 @@ fptype gfFPFloat(struct fpconvert<fptype> value) {
   return convert.ret;
 }
 
-
 template <typename T>
-bool gfExpAllSet(T f)
-{
+bool gfExpAllSet(T f) {
   unsigned long long cmp = (1 << f.eBits) - 1;
   return cmp == f.exponent;
 }
 
 template <typename T>
-bool gfManAllSet(T f)
-{
+bool gfManAllSet(T f) {
   unsigned long long cmp = (1 << f.pBits) - 1;
   return cmp == f.mantissa;
 }
 
 template <typename T>
-bool gfIsNaN(T f)
-{
-  return (gfExpAllSet<T>(f) == true) &&
-    (f.mantissa != 0);
+bool gfIsNaN(T f) {
+  return (gfExpAllSet<T>(f) == true) && (f.mantissa != 0);
 }
 
 template <typename T>
-bool gfIsInf(T f)
-{
-  return (gfExpAllSet<T>(f) == true) &&
-    (f.mantissa == 0);
+bool gfIsInf(T f) {
+  return (gfExpAllSet<T>(f) == true) && (f.mantissa == 0);
 }
 
 template <typename T>
-bool gfGetMantissaBit(T f, unsigned bitPos)
-{
+bool gfGetMantissaBit(T f, unsigned bitPos) {
   assert(bitPos < f.pBits);
   unsigned long selector = 1 << bitPos;
   unsigned long bit = f.mantissa & selector;
@@ -135,8 +130,7 @@ bool gfGetMantissaBit(T f, unsigned bitPos)
 }
 
 template <typename T>
-bool gfGetExponentBit(T f, unsigned bitPos)
-{
+bool gfGetExponentBit(T f, unsigned bitPos) {
   assert(bitPos < f.eBits);
   unsigned long selector = 1 << bitPos;
   unsigned long bit = f.exponent & selector;
@@ -145,8 +139,7 @@ bool gfGetExponentBit(T f, unsigned bitPos)
 }
 
 template <typename TDest, typename TSrc>
-TDest gfRoundNearest(TSrc src)
-{
+TDest gfRoundNearest(TSrc src) {
   TDest dest;
   dest.sign = src.sign;
   dest.mantissa = 0;
@@ -171,30 +164,27 @@ TDest gfRoundNearest(TSrc src)
       dest.mantissa >>= numShifts;
     }
     /* Otherwise it's just 0 */
-  }
-  else {
+  } else {
     /* Plausibly not going to infinity :) */
     dest.exponent = src.exponent - centerDiff;
     if(dest.pBits >= src.pBits) {
       /* And we are done */
       dest.mantissa = src.mantissa;
-    }
-    else {
+    } else {
       unsigned roundingBit = src.pBits - dest.pBits;
       dest.mantissa = src.mantissa >> roundingBit;
-      unsigned long truncated = src.mantissa &
-        ((1 << roundingBit) - 1);
+      unsigned long truncated =
+          src.mantissa & ((1 << roundingBit) - 1);
       /* Check the first truncated bit to see if we
        * need to consider rounding up */
       if((truncated & (1 << roundingBit - 1)) > 0) {
         unsigned long trailing;
-        trailing = truncated &
-          ((1 << (roundingBit - 1)) - 1);
+        trailing =
+            truncated & ((1 << (roundingBit - 1)) - 1);
         /* Round up if trailing is nonzero or if
          * it is zero whatever direction makes the
          * 0'th bit of the mantissa 0 */
-        if(trailing > 0 ||
-           ((dest.mantissa & 1) == 1)) {
+        if(trailing > 0 || ((dest.mantissa & 1) == 1)) {
           /* Round up. */
           dest.mantissa++;
           if(dest.mantissa == 0) {
