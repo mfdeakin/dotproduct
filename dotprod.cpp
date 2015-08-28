@@ -13,8 +13,8 @@
 
 template <typename fptype>
 void genVector(
-    fptype *vec, unsigned vecSize, std::mt19937_64 rgen,
-    std::uniform_real_distribution<fptype> dist) {
+    fptype *vec, unsigned vecSize, std::mt19937_64 &rgen,
+    std::uniform_real_distribution<fptype> &dist) {
   for(unsigned i = 0; i < vecSize; i++) {
     vec[i] = dist(rgen);
   }
