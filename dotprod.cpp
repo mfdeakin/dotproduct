@@ -121,6 +121,16 @@ void parseOptions(int argc, char **argv, int &testSize,
   } while(ret != -1);
 }
 
+float nextFloat(float fp) {
+  union {
+    float fp;
+    int i;
+  } convert;
+  convert.fp = fp;
+  convert.i++;
+  return convert.fp;
+}
+
 int main(int argc, char **argv) {
   int testSize = 1024;
   int numTests = 65536;
@@ -183,18 +193,6 @@ int main(int argc, char **argv) {
                   correctResult.result;
     if(kahanResult.result != spResult.result) numDiffs[1]++;
     totalErr[2] += logl(err3) / logl(10.0);
-
-    struct testResult<float> kobbeltResult =
-        testFunction<float, float, kobbeltDotProd<float> >(
-            vec1, vec2, testSize);
-    runningTimes[4] = addTimes(kobbeltResult.elapsedTime,
-                               runningTimes[4]);
-    double err4 = std::fabs(kobbeltResult.result -
-                            correctResult.result) /
-                  correctResult.result;
-    if(kobbeltResult.result != spResult.result)
-      numDiffs[2]++;
-    totalErr[3] += logl(err4) / logl(10.0);
   }
   printf(
       "Ran %d tests of size %d\n"
