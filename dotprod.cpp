@@ -36,7 +36,7 @@ fptype kahanDotProd(const fptype *v1, const fptype *v2,
   fptype total = 0.0;
   fptype c = 0.0;
   for(unsigned i = 0; i < len; i++) {
-    fptype mod = fma(v1[i], v2[i], -c);
+    fptype mod = std::fma(v1[i], v2[i], -c);
     fptype tmp = total + mod;
     c = (tmp - total) - mod;
     total = tmp;
@@ -49,7 +49,8 @@ long double correctDotProd(const fptype *v1,
                            const fptype *v2, unsigned len) {
   long double total = 0.0;
   for(unsigned i = 0; i < len; i++) {
-    total = fmal(v1[i], v2[i], total);
+    total = std::fma((long double)v1[i], (long double)v2[i],
+                     (long double)total);
   }
   return total;
 }
