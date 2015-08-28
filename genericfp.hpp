@@ -10,35 +10,39 @@ struct fp {
   unsigned long mantissa : p;
   unsigned long exponent : e;
   unsigned sign : 1;
-  static const unsigned eBits = e, pBits = p;
+  static const unsigned eBits = e, pBits = p,
+                        precision = p + 1;
 } __attribute__((packed));
 
 /* The bitfield lengths specified by IEEE 754 */
-const unsigned gf16ExpBits = 4;
-const unsigned gf16ManBits = 11;
-const unsigned gf32ExpBits = 8;
-const unsigned gf32ManBits = 23;
-const unsigned gf43ExpBits = 11;
-const unsigned gf43ManBits = 31;
-const unsigned gf64ExpBits = 11;
-const unsigned gf64ManBits = 52;
-const unsigned gf79ExpBits = 15;
-const unsigned gf79ManBits = 63;
+constexpr const unsigned gf16ExpBits = 4;
+constexpr const unsigned gf16ManBits = 11;
+constexpr const unsigned gf32ExpBits = 8;
+constexpr const unsigned gf32ManBits = 23;
+constexpr const unsigned gf44ExpBits = 11;
+constexpr const unsigned gf44ManBits = 32;
+constexpr const unsigned gf64ExpBits = 11;
+constexpr const unsigned gf64ManBits = 52;
+constexpr const unsigned gf80ExpBits = 15;
+constexpr const unsigned gf80ManBits = 64;
 
 /* Easy names for these structures */
 typedef fp<gf16ExpBits, gf16ManBits> fp16;
 typedef fp<gf32ExpBits, gf32ManBits> fp32;
-typedef fp<gf43ExpBits, gf43ManBits> fp43;
+typedef fp<gf44ExpBits, gf44ManBits> fp44;
 typedef fp<gf64ExpBits, gf64ManBits> fp64;
-typedef fp<gf79ExpBits, gf79ManBits> fp79;
+typedef fp<gf80ExpBits, gf80ManBits> fp79;
 
 template <typename fptype>
 struct fpconvert;
 
 template <>
 struct fpconvert<float> : public fp32 {};
+
 template <>
 struct fpconvert<double> : public fp64 {};
+template <>
+struct fpconvert<long double> : public fp79 {};
 
 template <typename fptype>
 struct fpconvert<fptype> gfFPStruct(fptype value);
