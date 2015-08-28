@@ -36,7 +36,7 @@ fptype kahanDotProd(const fptype *v1, const fptype *v2,
   fptype total = 0.0;
   fptype c = 0.0;
   for(unsigned i = 0; i < len; i++) {
-    fptype mod = fma(v1[i], v2[i], -c);
+    fptype mod = std::fma(v1[i], v2[i], -c);
     fptype tmp = total + mod;
     c = (tmp - total) - mod;
     total = tmp;
@@ -141,7 +141,7 @@ int main(int argc, char **argv) {
   vec2 = (float *)malloc(sizeof(float[testSize]));
   assert(vec1 != NULL);
   assert(vec2 != NULL);
-  const float maxMag = 1024.0 * 1024.0;
+  constexpr const float maxMag = 1024.0 * 1024.0;
   std::random_device rd;
   std::mt19937_64 engine(rd());
   std::uniform_real_distribution<float> rgenf(-maxMag,
@@ -149,7 +149,7 @@ int main(int argc, char **argv) {
   struct timespec runningTimes[] = {
       {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}};
   long double totalErr[] = {0.0, 0.0, 0.0, 0.0};
-  unsigned numDiffs[] = {0, 0, 0};
+	long double totalBitsWrong[] = {0.0, 0.0, 0.0, 0.0};
   for(int i = 0; i < numTests; i++) {
     genVector(vec1, testSize, engine, rgenf);
     genVector(vec2, testSize, engine, rgenf);
@@ -166,9 +166,13 @@ int main(int argc, char **argv) {
     runningTimes[1] =
         addTimes(spResult.elapsedTime, runningTimes[1]);
     double err1 =
-        std::fabs(spResult.result - correctResult.result) /
-        correctResult.result;
-    totalErr[0] += logl(err1) / logl(10.0);
+        std::fabs(spResult.result - correctResult.result);
+		if(err1 != 0.0f && correctResult.result != 0.0f) {
+			double relErr = err1 / std::fabs(correctResult.result);
+			double inaccurateBits = std::log(relErr) / std::log(2);
+			totalBitsWrong[0] += inaccurateBits;
+		}
+    totalErr[0] += err1;
 
     struct testResult<float> compensatedResult =
         testFunction<float, float,
@@ -177,11 +181,13 @@ int main(int argc, char **argv) {
     runningTimes[2] = addTimes(
         compensatedResult.elapsedTime, runningTimes[2]);
     double err2 = std::fabs(compensatedResult.result -
-                            correctResult.result) /
-                  correctResult.result;
-    if(compensatedResult.result != spResult.result)
-      numDiffs[0]++;
-    totalErr[1] += logl(err2) / logl(10.0);
+                            correctResult.result);
+		if(err2 != 0.0f && correctResult.result != 0.0f) {
+			double relErr = err2 / std::fabs(correctResult.result);
+			double inaccurateBits = std::log(relErr) / std::log(2);
+			totalBitsWrong[1] += inaccurateBits;
+		}
+    totalErr[1] += err2;
 
     struct testResult<float> kahanResult =
         testFunction<float, float, kahanDotProd<float> >(
@@ -189,28 +195,30 @@ int main(int argc, char **argv) {
     runningTimes[3] =
         addTimes(kahanResult.elapsedTime, runningTimes[3]);
     double err3 = std::fabs(kahanResult.result -
-                            correctResult.result) /
-                  correctResult.result;
-    if(kahanResult.result != spResult.result) numDiffs[1]++;
-    totalErr[2] += logl(err3) / logl(10.0);
+                            correctResult.result);
+		if(err3 != 0.0f && correctResult.result != 0.0f) {
+			double relErr = err3 / std::fabs(correctResult.result);
+			double inaccurateBits = std::log(relErr) / std::log(2);
+			totalBitsWrong[2] += inaccurateBits;
+		}
+		totalErr[2] += err3;
   }
   printf(
       "Ran %d tests of size %d\n"
       "Correct Running Time: %ld.%09ld s\n"
-      "Naive Time: %ld.%09ld s; Error %Le\n"
-      "Compensated Time: %ld.%09ld s; Error %Le, "
-      "Error-Naive: %Le, Number of times different: %u\n"
-      "Kahan Time: %ld.%09ld s; Error %Le, Error-Naive: "
-      "%Le, Number of times different: %u\n",
+      "Naive Time: %ld.%09ld s; Average Error %Le; Average Bits Wrong: %Le\n"
+      "Compensated Time: %ld.%09ld s; Average Error %Le; Average Bits Wrong: %Le\n"
+      "Kahan Time: %ld.%09ld s; Average Error %Le; Average Bits Wrong: %Le\n",
       numTests, testSize, runningTimes[0].tv_sec,
       runningTimes[0].tv_nsec, runningTimes[1].tv_sec,
       runningTimes[1].tv_nsec, totalErr[0] / numTests,
+			totalBitsWrong[0] / numTests,
       runningTimes[2].tv_sec, runningTimes[2].tv_nsec,
       totalErr[1] / numTests,
-      (totalErr[1] - totalErr[0]) / numTests, numDiffs[0],
+			totalBitsWrong[1] / numTests,
       runningTimes[3].tv_sec, runningTimes[3].tv_nsec,
       totalErr[2] / numTests,
-      (totalErr[2] - totalErr[0]) / numTests, numDiffs[1]);
+			totalBitsWrong[2] / numTests);
   free(vec2);
   free(vec1);
   return 0;
