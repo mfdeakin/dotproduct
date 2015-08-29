@@ -149,7 +149,7 @@ void parseOptions(int argc, char **argv, int &testSize,
 int main(int argc, char **argv) {
   int testSize = 1024;
   int numTests = 65536;
-  typedef float fptype;
+  typedef double fptype;
   parseOptions(argc, argv, testSize, numTests);
 
   fptype *vec1, *vec2;
@@ -242,7 +242,7 @@ int main(int argc, char **argv) {
     totalErr[2] += err3;
 
     struct testResult<fptype> fmaResult =
-        testFunction<fptype, fptype, dotProd<fptype> >(
+        testFunction<fptype, fptype, fmaDotProd<fptype> >(
             vec1, vec2, testSize);
     runningTimes[4] =
         addTimes(fmaResult.elapsedTime, runningTimes[4]);
