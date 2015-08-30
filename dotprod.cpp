@@ -247,7 +247,7 @@ int main(int argc, char **argv) {
     runningTimes[4] =
         addTimes(fmaResult.elapsedTime, runningTimes[4]);
     double err4 =
-        std::fabs(spResult.result - correctResult.result);
+        std::fabs(fmaResult.result - correctResult.result);
     if(err4 != 0.0f && correctResult.result != 0.0f) {
       double relErr =
           err4 / std::fabs(correctResult.result);
