@@ -9,117 +9,77 @@
 #include "accurate_math.hpp"
 #include "genericfp.hpp"
 
-template <typename fptype>
-int fpGenus(fptype val) {
-  fpconvert<fptype> bitwiseVal = gfFPStruct(val);
-  int genus =
-      bitwiseVal.exponent * 2 + (bitwiseVal.mantissa & 1);
-  return genus;
+template <typename T>
+constexpr int sign(const T &val) {
+  return (T(0) < val) - (val < T(0));
 }
 
 template <typename fptype>
-bool genusEqual(fptype lhs, fptype rhs) {
-  int gLhs = fpGenus(lhs);
-  int gRhs = fpGenus(rhs);
-  return gLhs == gRhs;
+int computeGenus(fptype val) {
+  fpconvert<fptype> hwFloatFields = gfFPStruct(val);
+  return hwFloatFields.exponent * 2 +
+         (hwFloatFields.mantissa & 1);
 }
 
 template <typename fptype>
-typename std::map<int, fptype>::iterator tableInsert(
-    fptype value, std::map<int, fptype> table,
-    typename std::map<int, fptype>::iterator hint) {
-  int genus = fpGenus(value);
-  int otherGenus = genus ^ 1;
-  if(table.count(genus) > 0) {
-    value += table.at(genus);
-    table.erase(genus);
-    return tableInsert(value, table, hint);
-  } else if(table.count(otherGenus) > 0 &&
-            std::signbit(value) !=
-                std::signbit(table.at(otherGenus))) {
-    /* Maintain the invariant that two values of opposite
-     * sign
-     * of the same genus are always added together.
-     * This can be done exactly, and reduces complexity
-     * later
+void tableInsert(std::map<int, fptype> &table, fptype val) {
+  /* First determine where in the table the value is to go */
+  int genus = computeGenus(val);
+  if(table.count(genus) == 0) {
+    /* There is no value here
+     * We might be able to exactly add this number
+     * and the one with the same exponent
+     * but different final bit in the mantissa,
+     * though, so check for that one.
+     * If it exists and is of opposite sign,
+     * then it will work
      */
-    value += table.at(otherGenus);
-    table.erase(otherGenus);
-    return tableInsert(value, table, hint);
-  } else {
-    /* No more values are in our way */
-    return table.insert(hint, {genus, value});
-  }
-}
-
-template <typename fptype>
-void tableInsert(fptype value,
-                 std::map<int, fptype> &table) {
-  int genus = fpGenus(value);
-  auto hint = table.find(genus);
-  tableInsert(value, table, hint);
-}
-
-template <typename fptype>
-fptype kobbeltDotProd(const fptype *vec1,
-                      const fptype *vec2, unsigned len) {
-  if(len == 0) return 0.0;
-  std::map<int, fptype> fpTable;
-  /* First exactly store the values of the products */
-  for(unsigned i = 0; i < len; i++) {
-    /* A minor simplification of Kobbelt's algorithm -
-     * store only two values for each product,
-     * instead of four.
-     */
-    std::array<fptype, 2> prod = twoProd(vec1[i], vec2[i]);
-    tableInsert(prod[0], fpTable);
-    tableInsert(prod[1], fpTable);
-  }
-  /* Now eliminate all values of opposite sign to the
-   * highest value.
-   * This prevents catastrophic losses of precision in the
-   * last step, at the expense of potentially exponential
-   * runtime.
-   */
-  auto itr = fpTable.end();
-  /* We already know there must be at least one value in the
-   * table, as the vectors are gauranteed to have at least
-   * one value by this point.
-   * Thus, itr cannot equal fpTable.begin(),
-   * so it is safe to decrement
-   */
-  itr--;
-  auto prevPos = itr;
-  fptype prevVal = (*prevPos).second;
-  while(itr != fpTable.begin()) {
-    itr--;
-    fptype curVal = (*itr).second;
-    fpTable.erase(itr);
-    if(std::signbit(prevVal) != std::signbit(curVal)) {
-      /* Fix curVal's sign! */
-      int curGenus = fpGenus(curVal);
-      prevVal /= 2;
-      int prevGenus = fpGenus(prevVal);
-      auto erasePos = prevPos;
-      while((prevGenus & ~1) >= (curGenus & ~1)) {
-        prevPos = tableInsert(prevVal, fpTable, prevPos);
-        prevVal /= 2;
-        prevGenus -= 2;
-      }
-      fpTable.erase(erasePos);
-      itr = prevPos;
-      tableInsert(curVal + prevVal * 2, fpTable, prevPos);
+    int otherGenus = genus ^ 1;
+    if(table.count(otherGenus) > 0 &&
+       sign(val) != sign(table[otherGenus])) {
+      /* The other value exists and is of the correct sign,
+       * so add them together, remove the other value,
+       * and insert their sum
+       */
+      val += table[otherGenus];
+      table.erase(otherGenus);
+      tableInsert(table, val);
     } else {
-      prevPos = itr;
-      prevVal = curVal;
+      /* Nothing else to do, just insert it */
+      table.insert({genus, val});
     }
+  } else {
+    /* There is already a value of the same genus,
+     * so we can add them exactly,
+     * remove the other value from the table,
+     * and then insert their sum
+     */
+    val += table[genus];
+    table.erase(genus);
+    tableInsert(table, val);
   }
-  /* Finally, sum values in the table from the bottom up */
-  fptype dotProd = 0.0;
-  for(auto itr = fpTable.begin(); itr != fpTable.end();
-      itr++)
-    dotProd += (*itr).second;
-  return dotProd;
+}
+
+template <typename fptype, typename rettype>
+rettype kobbeltDotProd(const fptype *v1, const fptype *v2,
+                       const unsigned int size) {
+  /* Start by inserting the exact products
+   * of the values into a table ordered by their genus
+   */
+  std::map<int, fptype> table;
+  for(unsigned int i = 0; i < size; i++) {
+    std::array<fptype, 2> prod = twoProd(v1[i], v2[i]);
+    tableInsert(table, prod[0]);
+    tableInsert(table, prod[1]);
+  }
+  /* Now add them together in the order
+   * from least genus to greatest
+   */
+  rettype ret = 0.0;
+  for(auto kvpair : table) {
+    ret += kvpair.second;
+  }
+  return ret;
 }
 
 #endif

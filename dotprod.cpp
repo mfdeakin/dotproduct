@@ -162,11 +162,8 @@ int main(int argc, char **argv) {
   std::mt19937_64 engine(rd());
   std::uniform_real_distribution<fptype> rgenf(-maxMag,
                                                maxMag);
-  constexpr const int tests = 4;
+  constexpr const int tests = 5;
   struct timespec runningTimes[tests + 1];
-  static_assert(sizeof(runningTimes) ==
-                    sizeof(struct timespec[tests + 1]),
-                "Sizeof error!");
   memset(&runningTimes, 0, sizeof(runningTimes));
   long double totalErr[tests];
   memset(&totalErr, 0, sizeof(totalErr));
@@ -258,6 +255,24 @@ int main(int argc, char **argv) {
         maxBitsWrong[3] = inaccurateBits;
     }
     totalErr[3] += err4;
+
+    struct testResult<fptype> kobbeltResult =
+        testFunction<fptype, fptype, kobbeltDotProd<fptype> >(
+            vec1, vec2, testSize);
+    runningTimes[5] =
+        addTimes(kobbeltResult.elapsedTime, runningTimes[5]);
+    double err5 =
+        std::fabs(kobbeltResult.result - correctResult.result);
+    if(err5 != 0.0f && correctResult.result != 0.0f) {
+      double relErr =
+          err5 / std::fabs(correctResult.result);
+      double inaccurateBits =
+          std::log(relErr) / std::log(2);
+      totalBitsWrong[4] += inaccurateBits;
+      if(inaccurateBits > maxBitsWrong[3])
+        maxBitsWrong[4] = inaccurateBits;
+    }
+    totalErr[4] += err5;
   }
   printf(
       "Ran %d tests of size %d\n"
@@ -269,6 +284,8 @@ int main(int argc, char **argv) {
       "Kahan Time: %ld.%09ld s; Average Error %Le; "
       "Average Bits Wrong: %Le; Maximum Bits Wrong: %Le\n"
       "FMA Time: %ld.%09ld s; Average Error %Le; "
+      "Average Bits Wrong: %Le; Maximum Bits Wrong: %Le\n"
+      "Kobbelt Time: %ld.%09ld s; Average Error %Le; "
       "Average Bits Wrong: %Le; Maximum Bits Wrong: %Le\n",
       numTests, testSize, runningTimes[0].tv_sec,
       runningTimes[0].tv_nsec, runningTimes[1].tv_sec,
@@ -281,7 +298,10 @@ int main(int argc, char **argv) {
       totalBitsWrong[2] / numTests, maxBitsWrong[2],
       runningTimes[4].tv_sec, runningTimes[4].tv_nsec,
       totalErr[3] / numTests, totalBitsWrong[3] / numTests,
-      maxBitsWrong[3]);
+      maxBitsWrong[3],
+      runningTimes[5].tv_sec, runningTimes[5].tv_nsec,
+      totalErr[4] / numTests, totalBitsWrong[4] / numTests,
+      maxBitsWrong[4]);
   free(vec2);
   free(vec1);
   return 0;
